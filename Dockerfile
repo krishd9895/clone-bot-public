@@ -1,31 +1,41 @@
-FROM ubuntu:latest
+# Use the official Python image from the Docker Hub
+FROM python:3.12-slim
 
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Set working directory
 WORKDIR /usr/src/app
-SHELL ["/bin/bash", "-c"]
-ENV DEBIAN_FRONTEND="noninteractive"
 
-RUN apt-get -y update && apt-get install -y apt-utils && \
-    apt-get install -y python3 python3-pip python3-venv wget \
-    tzdata p7zip-full p7zip-rar xz-utils curl pv jq ffmpeg \
-    locales git unzip rtmpdump libmagic-dev libcurl4-openssl-dev \
-    libssl-dev libsqlite3-dev libfreeimage-dev libpq-dev libffi-dev && \
-    locale-gen en_US.UTF-8
-
-ENV LANG="en_US.UTF-8" LANGUAGE="en_US:en"
+# Install system dependencies and libraries
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libjpeg-dev \
+    zlib1g-dev \
+    python3-dev \
+    build-essential
 
 # Create a virtual environment
 RUN python3 -m venv /usr/src/app/venv
-# Activate the virtual environment and upgrade pip
-RUN source /usr/src/app/venv/bin/activate && pip install --upgrade pip
 
+# Install pip in the virtual environment
+RUN /bin/bash -c "source /usr/src/app/venv/bin/activate && pip install --upgrade pip"
+
+# Copy the requirements file
 COPY requirements.txt .
 
-# Use the virtual environment to install requirements
-RUN source /usr/src/app/venv/bin/activate && pip install --no-cache-dir -r requirements.txt
+# Activate the virtual environment and install Python packages
+RUN /bin/bash -c "source /usr/src/app/venv/bin/activate && pip install --no-cache-dir -r requirements.txt"
 
-RUN playwright install-deps && playwright install
+# Install Playwright dependencies
+RUN /bin/bash -c "source /usr/src/app/venv/bin/activate && playwright install-deps && playwright install"
 
+# Copy the rest of the application code
 COPY . .
 
-# Use the virtual environment for the CMD
-CMD ["bash", "-c", "source /usr/src/app/venv/bin/activate && bash start.sh"]
+# Set entrypoint to activate the virtual environment and run the application
+ENTRYPOINT ["/bin/bash", "-c", "source /usr/src/app/venv/bin/activate && exec \"$@\"", "--"]
+
+# Default command to run when container starts
+CMD ["bash", "-c", "python3 load.py && python3 -m bot"]
